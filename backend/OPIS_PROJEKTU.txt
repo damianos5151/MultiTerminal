@@ -1,0 +1,260 @@
+MultiTerminal - opis backendu
+================================
+
+2. Główne technologie
+----------------------
+- Python 3.x
+- FastAPI - framework do tworzenia API HTTP
+- SQLAlchemy 2.x - ORM do pracy z bazą danych
+- Alembic - migracje schematu bazy danych
+- PostgreSQL - baza relacyjna
+- Pydantic - walidacja danych i serializacja
+- pytest + pytest-asyncio - testy automatyczne
+
+3. Struktura katalogów
+----------------------
+backend/
+  app/
+    core/config.py
+    models/
+      __init__.py
+      base.py
+      host.py
+      session.py
+    schemas/host.py
+    main.py
+  alembic/
+    env.py
+    versions/...migration...
+  scripts/init_db.py
+  tests/
+    conftest.py
+    test_db.py
+
+4. Opis plików i ich roli
+-------------------------
+
+4.1. backend/app/core/config.py
+Plik konfiguracyjny. Tworzy obiekt settings, który czyta ustawienia projektu, m.in.:
+- DATABASE_URL - adres PostgreSQL używany przez asynchroniczny silnik SQLAlchemy
+- DATABASE_URL_SYNC - adres do Alembica i skryptów synchronizowanych
+- SSH_KEY_PATH - ścieżka do klucza SSH
+- SSH_TIMEOUT - timeout dla połączeń SSH
+- SCAN_INTERVAL - interwał skanowania sieci
+- SCAN_SUBNET - zakres sieci do skanowania
+
+Definicja:
+  class Settings(BaseSettings):
+    ...
+
+To pozwala na centralne utrzymywanie konfiguracji i łatwe nadpisywanie wartości zmiennymi środowiskowymi albo plikiem .env.
+
+4.2. backend/app/models/base.py
+To jest klasa bazowa dla wszystkich modeli SQLAlchemy:
+
+  class Base(DeclarativeBase):
+      pass
+
+W SQLAlchemy 2.x klasy modeli zwykle dziedziczą po DeclarativeBase. Dzięki temu wszystkie encje są zgrupowane w jednym metadata, które potem używa Alembic i create_all/drop_all.
+
+4.3. backend/app/models/__init__.py
+Plik eksportuje modele do importów zewnętrznych:
+
+  from app.models.base import Base
+  from app.models.host import Host
+
+  __all__ = ["Base", "Host"]
+
+To sprawia, że można importować np.:
+  from app.models import Host
+
+4.4. backend/app/models/host.py
+To jest główny model encji Host (hosta w sieci).
+
+Pole:
+- id - klucz główny
+- ip_address - adres IP, unikalny, indeksowany, maksymalnie 45 znaków
+- hostname - nazwa hosta, opcjonalna
+- status - status hosta, np. unknown, online, offline
+- last_seen - czas ostatniego widoku hosta
+- created_at - czas utworzenia rekordu
+
+Dodatkowo zdefiniowana jest metoda __repr__, która tworzy ładny string reprezentujący obiekt do logów i debugowania.
+
+Model ma typy z SQLAlchemy 2.x:
+  Mapped[int]
+  mapped_column(...)
+
+To jest nowoczesny styl deklarowania modeli SQLAlchemy.
+
+4.5. backend/app/models/session.py
+Plik odpowiedzialny za tworzenie i dostarczanie sesji bazy danych do FastAPI.
+
+Tworzy:
+- engine = create_async_engine(...)
+- AsyncSessionLocal = async_sessionmaker(...)
+
+Funkcja get_db():
+  async def get_db() -> AsyncGenerator[AsyncSession, None]:
+      async with AsyncSessionLocal() as session:
+          try:
+              yield session
+          finally:
+              await session.close()
+
+To jest klasyczny wzorzec dependency injection w FastAPI. Każde endpoint API może pobrać sesję przez parametr:
+
+  db: AsyncSession = Depends(get_db)
+
+Dzięki temu FastAPI otwiera sesję na czas żądania i zamyka ją po jego zakończeniu.
+
+4.6. backend/app/schemas/host.py
+To są modele Pydantic dla danych wejściowych i wyjściowych API.
+
+- HostBase - wspólne pola: ip_address, hostname
+- HostCreate - model do tworzenia hosta
+- HostRead - model zwracany klientowi; zawiera id, status, last_seen, created_at
+- HostUpdate - model do aktualizacji częściowych danych
+
+Ważna linia:
+  class Config:
+      from_attributes = True
+
+Dzięki temu model Pydantic może tworzyć obiekt z instancji SQLAlchemy ORM, nie tylko ze słownika.
+
+4.7. backend/app/main.py
+To jest punkt wejścia aplikacji FastAPI.
+
+Kod:
+  app = FastAPI()
+
+oraz endpoint:
+  @app.get("/api/v1/hosts", response_model=list[HostRead])
+  async def list_hosts(db: AsyncSession = Depends(get_db)):
+      result = await db.execute(select(Host))
+      return result.scalars().all()
+
+To oznacza:
+- uruchamia aplikację FastAPI
+- definiuje endpoint GET /api/v1/hosts
+- zwraca listę wszystkich hostów z bazy
+- używa Select do pobrania rekordów z tabeli hosts
+- serializuje dane zgodnie z modelem HostRead
+
+Czyli ten plik jest najważniejszym punktem publicznego API backendu.
+
+4.8. backend/app/__init__.py
+Plik pakietowy. W tej chwili jest prawdopodobnie pusty albo minimalny. Jego rola to uczynienie katalogu app modułem Pythona i ewentualne inicjalizacje pakietu.
+
+4.9. backend/tests/conftest.py
+Plik z fixture pytest do testów bazy danych.
+
+Kod tworzy nowy, asynchroniczny silnik:
+  engine = create_async_engine(settings.DATABASE_URL, echo=False)
+
+Następnie:
+- tworzy wszystkie tabele z Base.metadata.create_all
+- tworzy sesję AsyncSession
+- przekazuje ją do testu przez yield
+- po teście usuwa tabele poprzez drop_all
+- zamyka silnik engine.dispose()
+
+To gwarantuje, że każdy test ma czystą bazę i nie wpływa na inne testy.
+
+4.10. backend/tests/test_db.py
+To jest pierwszy test przykładowy.
+
+Kod:
+  host = Host(ip_address="192.168.1.10", hostname="test-host", status="online")
+  db_session.add(host)
+  await db_session.commit()
+  await db_session.refresh(host)
+
+Następnie sprawdza, że:
+- host.id nie jest None
+- ip_address jest poprawny
+- status jest online
+
+Dzięki temu test weryfikuje, że model Host i sesja DB działają poprawnie.
+
+4.11. backend/scripts/init_db.py
+To jest skrypt inicjalizujący bazę danych.
+
+Uruchamia komendę Alembic:
+  alembic upgrade head
+
+Jeśli migracja zakończy się błędem, skrypt wypisuje komunikat i kończy pracę z exit code 1.
+
+Jest to przydatne do automatycznego przygotowania bazy przed uruchomieniem aplikacji.
+
+4.12. backend/alembic/env.py
+To jest plik konfiguracji Alembica.
+
+- dodaje katalog backend do sys.path, żeby Python widział moduł app
+- pobiera ustawienia z app.core.config.settings
+- ustawia URL do bazy z settings.DATABASE_URL_SYNC
+- ustawia metadata = Base.metadata
+- obsługuje migracje w trybie offline i online
+
+Dzięki temu Alembic wie, jak połączyć się z bazą i jakie modele ma porównywać przy migracjach.
+
+4.13. backend/alembic/versions/d88072909b35_create_hosts_table.py
+To jest migracja tworzona przez Alembic. W praktyce tworzy tabelę hosts.
+
+Tworzy kolumny:
+- id
+- ip_address
+- hostname
+- status
+- last_seen
+- created_at
+
+Dodatkowo dodaje indeks unikalny dla ip_address.
+
+Migracja ma funkcje:
+- upgrade() - wykonuje zmiany w bazie
+- downgrade() - usuwa tabelę / cofnięcie zmian
+
+To jest pierwszy krok struktury bazy w projekcie.
+
+5. Jak działa cała architektura
+------------------------------
+Praca wygląda mniej więcej tak:
+1. Aplikacja FastAPI startuje z pliku app/main.py
+2. FastAPI używa zależności get_db() z app/models/session.py
+3. Endpoint /api/v1/hosts wykonuje zapytanie SQL do tabeli hosts
+4. SQLAlchemy pobiera rekordy i zwraca je jako obiekty Host
+5. Schemat HostRead serializuje dane do formatu JSON, który wysyła klientowi
+6. Baza danych jest tworzona przez Alembic i model Base.metadata
+7. Testy tworzą bazę testową na podstawie tych samych modeli, działają izolacyjnie i usuwają dane po zakończeniu
+
+6. Publiczna warstwa API
+------------------------
+W obecnej postaci backend udostępnia następujące publiczne elementy:
+- endpoint GET /api/v1/hosts
+- zwraca listę hostów w formie JSON
+- dane są opisane przez HostRead
+
+Czyli obecny backend jest raczej prostym API read-only do odczytu hostów, a nie pełnym systemem CRUD.
+
+7. Wnioski
+----------
+Kod jest zorganizowany w prostym, typowym układzie dla FastAPI + SQLAlchemy:
+- app/models - encje bazy danych
+- app/schemas - walidacja i serializacja
+- app/core - konfiguracja
+- app/main.py - wejście do aplikacji
+- tests - testy izolowane od bazy
+- alembic - migracje bazy
+
+Najbardziej istotne części projektu to:
+- model Host
+- sesja bazy danych
+- endpoint list_hosts
+- fixture db_session
+
+To jest podstawowa warstwa backendu do przechowywania i udostępniania informacji o hostach w sieci.
+
+8. Dodatkowa uwaga o projekcie
+------------------------------
+W obecnej wersji README jest bardzo skromne, a część funkcjonalności (np. skanowanie sieci, SSH, paczki scan logic) nie jest jeszcze rozwinięta. Widoczne pliki sugerują, że projekt jest w fazie rozwoju i ma założenie rozszerzenia do pełnego systemu monitorowania hostów w sieci.
