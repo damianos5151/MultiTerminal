@@ -9,7 +9,6 @@ BACKEND_PID=$!
 
 cd ../frontend
 echo "Uruchamianie frontendu..."
-# To samo dla frontendu
 npm run dev > ../frontend.log 2>&1 &
 FRONTEND_PID=$!
 
