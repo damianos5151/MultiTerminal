@@ -6,10 +6,10 @@ from app.core.config import settings
 router = APIRouter()
 
 # ==== PODMIEŃ NA SWÓJ HOST TESTOWY ====
-SSH_HOST = "192.168.1.0"   # IP hosta, do którego chcesz się połączyć
-SSH_USER = "twoj_user"        # użytkownik SSH
+SSH_HOST = "192.168.0.0"   # IP hosta, do którego chcesz się połączyć
+SSH_USER = "user"        # użytkownik SSH
 # SSH_KEY = settings.SSH_KEY_PATH  # jeśli używasz klucza z .env
-SSH_PASSWORD = "twoje_hasło" # jeśli używasz hasła (prostsze na test)
+SSH_PASSWORD = "passwd" # jeśli używasz hasła (prostsze na test)
 
 @router.websocket("/ws/terminal")
 async def terminal_websocket(websocket: WebSocket):

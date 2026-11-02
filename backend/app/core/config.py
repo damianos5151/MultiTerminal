@@ -2,10 +2,10 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # PostgreSQL — async driver (asyncpg)
-    DATABASE_URL: str = "postgresql+asyncpg://multiterminal:multiterminal_dev_password@localhost:5432/multiterminal"
+    DATABASE_URL: str = "postgresql+asyncpg://multiterminal:multiterminal_dev_password@127.0.0.1:5432/multiterminal"
     
     # PostgreSQL — sync driver (dla Alembica i skryptów)
-    DATABASE_URL_SYNC: str = "postgresql+psycopg://multiterminal:multiterminal_dev_password@localhost:5432/multiterminal"
+    DATABASE_URL_SYNC: str = "postgresql+psycopg://multiterminal:multiterminal_dev_password@127.0.0.1:5432/multiterminal"
     
     # SSH
     SSH_KEY_PATH: str = "~/.ssh/id_rsa"
