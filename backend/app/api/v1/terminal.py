@@ -1,15 +1,12 @@
 import asyncio
+import ipaddress
+
 import asyncssh
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.core.config import settings
 
 router = APIRouter()
 
-# ==== PODMIEŃ NA SWÓJ HOST TESTOWY ====
-SSH_HOST = "192.168.0.0"   # IP hosta, do którego chcesz się połączyć
-SSH_USER = "user"        # użytkownik SSH
-# SSH_KEY = settings.SSH_KEY_PATH  # jeśli używasz klucza z .env
-SSH_PASSWORD = "passwd" # jeśli używasz hasła (prostsze na test)
 
 @router.websocket("/ws/terminal")
 async def terminal_websocket(websocket: WebSocket):
@@ -17,18 +14,49 @@ async def terminal_websocket(websocket: WebSocket):
     conn = None
     process = None
     try:
-        # 1. Połącz się przez SSH
+        try:
+            credentials = await websocket.receive_json()
+        except ValueError:
+            await websocket.send_text("Błędny format danych logowania.\r\n")
+            await websocket.close(code=1008)
+            return
+
+        if not isinstance(credentials, dict):
+            await websocket.send_text("Błędny format danych logowania.\r\n")
+            await websocket.close(code=1008)
+            return
+
+        host = credentials.get("host")
+        username = credentials.get("username")
+        password = credentials.get("password")
+        if (
+            not isinstance(host, str)
+            or not isinstance(username, str)
+            or not isinstance(password, str)
+            or not host
+            or not username.strip()
+            or not password
+        ):
+            await websocket.send_text("Podaj adres IP, użytkownika i hasło SSH.\r\n")
+            await websocket.close(code=1008)
+            return
+
+        try:
+            ipaddress.ip_address(host)
+        except ValueError:
+            await websocket.send_text("Podaj prawidłowy adres IPv4 lub IPv6.\r\n")
+            await websocket.close(code=1008)
+            return
+
         conn = await asyncssh.connect(
-            SSH_HOST,
-            username=SSH_USER,
-            password=SSH_PASSWORD,   # lub client_keys=[SSH_KEY]
-            known_hosts=None,        # TYLKO DO TESTU — wyłącza weryfikację klucza hosta
-            connect_timeout=5,
+            host,
+            username=username.strip(),
+            password=password,
+            known_hosts=None,
+            connect_timeout=settings.SSH_TIMEOUT,
         )
-        # 2. Otwórz interaktywną powłokę
         process = await conn.create_process(term_type="xterm")
 
-        # 3. Przekazuj dane w obie strony
         async def ws_to_ssh():
             while True:
                 data = await websocket.receive_text()
@@ -45,10 +73,10 @@ async def terminal_websocket(websocket: WebSocket):
 
     except WebSocketDisconnect:
         pass
-    except Exception as e:
+    except (asyncssh.Error, OSError, asyncio.TimeoutError) as error:
         try:
-            await websocket.send_text(f"\r\nBłąd: {e}\r\n")
-        except Exception:
+            await websocket.send_text(f"\r\nBłąd połączenia SSH: {error}\r\n")
+        except WebSocketDisconnect:
             pass
     finally:
         if process:
@@ -57,5 +85,5 @@ async def terminal_websocket(websocket: WebSocket):
             conn.close()
         try:
             await websocket.close()
-        except Exception:
+        except (RuntimeError, WebSocketDisconnect):
             pass

@@ -120,6 +120,72 @@
     inset 0 1px rgb(255 255 255 / 3%);
 }
 
+.login-surface {
+  padding: clamp(24px, 5vw, 48px);
+  background:
+    radial-gradient(ellipse at 12% 0, rgb(94 109 173 / 5%), transparent 45%),
+    #11141b;
+}
+
+.login-form {
+  width: min(100%, 440px);
+  margin: 0 auto;
+  display: grid;
+  gap: 10px;
+}
+
+.login-form label {
+  margin-top: 8px;
+  color: #c5ccda;
+  font-size: 12px;
+  font-weight: 560;
+}
+
+.login-form input {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid #343a49;
+  border-radius: 6px;
+  background: #171a22;
+  color: var(--text-strong);
+  font-size: 13px;
+}
+
+.login-form input::placeholder {
+  color: #747d8e;
+}
+
+.login-form input:focus {
+  border-color: #8e9bff;
+  outline: none;
+}
+
+.login-form button {
+  min-height: 42px;
+  margin-top: 12px;
+  border: 1px solid rgb(164 176 255 / 35%);
+  border-radius: 6px;
+  background: linear-gradient(145deg, #7685ec, #5f6dcc);
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 650;
+  transition: filter 140ms ease;
+}
+
+.login-form button:hover {
+  filter: brightness(1.1);
+}
+
+.login-hint {
+  margin: 4px 0 0;
+  color: #818a9b;
+  font-size: 11px;
+  line-height: 1.6;
+  text-align: center;
+}
+
 .terminal-toolbar {
   min-height: 56px;
   padding: 0 18px;
