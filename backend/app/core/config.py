@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     
     # Skanowanie
     SCAN_INTERVAL: int = 300
-    SCAN_SUBNET: str = "192.168.1.0/24"
+    SCAN_SUBNET: str = "192.168.0.0/24"
     
     class Config:
         env_file = ".env"
