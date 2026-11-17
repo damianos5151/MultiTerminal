@@ -114,7 +114,7 @@ async def terminal_websocket(websocket: WebSocket):
 
         try:
             # Wysyłamy komendę bezpośrednio do istniejącego procesu (z Enterem na końcu)
-            session["process"].stdin.write(command.strip() + "\n")
+            session["process"].stdin.write(command.strip() + "\r")
             await session["process"].stdin.drain()
             
             # Status connected (błędy w komendach będą widoczne w samym terminalu)
