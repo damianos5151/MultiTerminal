@@ -1,6 +1,7 @@
 #!/bin/bash
 
-echo "Uruchamianie backendu..."
+
+echo "Starting backend..."
 cd backend
 source .venv/bin/activate
 
@@ -8,7 +9,7 @@ uvicorn app.main:app --reload > ../backend.log 2>&1 &
 BACKEND_PID=$!
 
 cd ../frontend
-echo "Uruchamianie frontendu..."
+echo "Starting frontend..."
 npm run dev > ../frontend.log 2>&1 &
 FRONTEND_PID=$!
 
@@ -16,19 +17,19 @@ cd ..
 
 clear 
 echo "=========================================="
-echo "  Aplikacje uruchomione pomyślnie!"
+echo "  Fronted and backend ready"
 echo "=========================================="
-echo "Naciśnij [Ctrl+C], aby wyłączyć aplikacje."
+echo "Press [Ctrl+C], to stop."
 echo ""
-echo "Wskazówka: Logi znajdziesz w plikach backend.log oraz frontend.log"
+echo "Tip: Logs can be found in files 'backend.log' and 'frontend.log'"
 
 cleanup() {
     echo ""
-    echo "Zatrzymywanie aplikacji..."
+    echo "Stopping..."
     kill $BACKEND_PID 2>/dev/null
     kill $FRONTEND_PID 2>/dev/null
     pkill -P $$
-    echo "Gotowe!"
+    echo "Done"
     exit 0
 }
 
