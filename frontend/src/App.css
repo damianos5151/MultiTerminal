@@ -792,13 +792,6 @@
   cursor: not-allowed;
 }
 
-.command-hint {
-  margin: -4px 2px 0;
-  color: #687578;
-  font: 9px/1.5 var(--mono);
-  overflow-wrap: anywhere;
-}
-
 .notice-message {
   margin: 0;
   color: #e59a9b;
@@ -997,9 +990,6 @@
     display: none;
   }
 
-  .command-hint {
-    font-size: 8px;
-  }
 }
 
 @media (max-width: 640px) {

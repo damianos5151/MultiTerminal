@@ -104,74 +104,24 @@ async def terminal_websocket(websocket: WebSocket):
             await send_event({"type": "status", "host": host, "port": port, "status": "error"})
             await send_event({"type": "output", "host": host, "port": port, "data": f"\r\n[{host}:{port}] Błąd połączenia SSH: {error}\r\n"})
 
-    async def run_command(host: str, port: int, command: str):
+    # Zmieniona funkcja: wysyła komendę do istniejącej sesji terminala
+    async def run_command_in_session(host: str, port: int, command: str):
         session = sessions.get((host, port))
         if session is None:
             await send_event({"type": "status", "host": host, "port": port, "status": "error"})
             await send_event({"type": "output", "host": host, "port": port, "data": f"\r\n[{host}:{port}] Brak aktywnego połączenia.\r\n"})
             return
 
-        command_conn = None
         try:
-            command_conn = await asyncssh.connect(
-                host,
-                port=port,
-                username=session["username"],
-                password=session["password"],
-                known_hosts=None,
-                connect_timeout=settings.SSH_TIMEOUT,
-            )
-            remote_command = command
+            # Wysyłamy komendę bezpośrednio do istniejącego procesu (z Enterem na końcu)
+            session["process"].stdin.write(command.strip() + "\n")
+            await session["process"].stdin.drain()
             
-            # Specjalna obsługa dla Windowsa (jeśli host to Windows)
-            if command == "date":
-                is_windows = session.get("is_windows")
-                if is_windows is None:
-                    probe = await command_conn.run("cmd /c ver", check=False, timeout=5)
-                    is_windows = probe.exit_status == 0
-                    session["is_windows"] = is_windows
-                if is_windows:
-                    remote_command = "cmd /c date /t"
-
-            result = await command_conn.run(remote_command, check=False, timeout=30)
-            has_error = result.exit_status != 0 or bool(result.stderr)
-            output = f"\r\n[{host}:{port}] $ {command}\r\n"
-            if result.stdout:
-                stdout = terminal_newlines(result.stdout)
-                output += stdout
-                if not stdout.endswith("\r\n"):
-                    output += "\r\n"
-            if result.stderr:
-                stderr = terminal_newlines(result.stderr)
-                output += f"[{host}:{port}] STDERR:\r\n{stderr}"
-                if not stderr.endswith("\r\n"):
-                    output += "\r\n"
-            if result.exit_status not in (0, None):
-                output += f"[{host}:{port}] Kod zakończenia: {result.exit_status}\r\n"
-            
-            await send_event({"type": "output", "host": host, "port": port, "data": output})
-            await send_event({"type": "status", "host": host, "port": port, "status": "error" if has_error else "connected"})
-            await refresh_shell_prompt(session)
-        except asyncio.TimeoutError as error:
-            await send_event({"type": "status", "host": host, "port": port, "status": "error"})
-            output = f"\r\n[{host}:{port}] Błąd wykonania polecenia: "
-            if isinstance(error, asyncssh.TimeoutError):
-                output += "Proces nie zakończył się w ciągu 30 s.\r\n"
-                if error.stdout:
-                    output += terminal_newlines(error.stdout)
-                if error.stderr:
-                    output += f"[{host}:{port}] STDERR:\r\n{terminal_newlines(error.stderr)}"
-            else:
-                output += f"Przekroczono limit czasu połączenia SSH ({settings.SSH_TIMEOUT} s).\r\n"
-            await send_event({"type": "output", "host": host, "port": port, "data": output})
-            await refresh_shell_prompt(session)
+            # Status connected (błędy w komendach będą widoczne w samym terminalu)
+            await send_event({"type": "status", "host": host, "port": port, "status": "connected"})
         except (asyncssh.Error, OSError) as error:
             await send_event({"type": "status", "host": host, "port": port, "status": "error"})
             await send_event({"type": "output", "host": host, "port": port, "data": f"\r\n[{host}:{port}] Błąd wykonania polecenia: {error}\r\n"})
-            await refresh_shell_prompt(session)
-        finally:
-            if command_conn is not None:
-                command_conn.close()
 
     try:
         while True:
@@ -218,7 +168,9 @@ async def terminal_websocket(websocket: WebSocket):
                 if not hosts:
                     await send_event({"type": "error", "message": "Wybierz aktywny host lub wszystkie hosty."})
                     continue
-                await asyncio.gather(*(run_command(host, port, command.strip()) for host, port in hosts))
+                
+                # Wywołujemy nową funkcję
+                await asyncio.gather(*(run_command_in_session(host, port, command.strip()) for host, port in hosts))
             else:
                 await send_event({"type": "error", "message": "Nieznany typ akcji WebSocket."})
     except WebSocketDisconnect:

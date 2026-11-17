@@ -449,7 +449,6 @@ function App() {
                 <span className="command-target">{connectedCount} host{connectedCount === 1 ? "" : "y"}</span>
                 <button type="submit" aria-label="Wyślij polecenie" disabled={connectedCount === 0 || !command.trim()} title="Wyślij do wszystkich hostów">↵</button>
               </form>
-              <p className="command-hint">Dozwolone: date, df -h, free -h, hostname, systemctl --failed, uname -a, uptime, whoami</p>
               {notice && <p className="notice-message" role="status">{notice}</p>}
             </section>
 
